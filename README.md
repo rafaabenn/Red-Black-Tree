@@ -62,7 +62,7 @@ et que chaque clé cherchée est bien trouvée.
 Tableaux complets dans `resultats/benchmark.txt`. Mesures faites sur un Intel Xeon 2,1 GHz,
 g++ 13.3 `-O2` : les valeurs changent selon la machine, les tendances restent.
 
-## Ce qu'il faut retenir
+## Ce qu'on peut déduire :
 
 1. **L'équilibrage sauve l'arbre dans l'ordre croissant.** L'ABR devient une liste (hauteur = N) :
    à N = 20 000, il est environ **430 fois plus lent** à l'insertion que le rouge-noir.
