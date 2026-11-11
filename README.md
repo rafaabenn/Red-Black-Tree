@@ -1,6 +1,6 @@
 # ABR, arbre rouge-noir, map et unordered_map (C++)
 
-TP de C++ — ILISI 2e année — BENNOUR RAFAA
+TP de C++
 
 Comparaison de quatre structures pour stocker des clés et les retrouver :
 
