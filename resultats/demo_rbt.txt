@@ -44,115 +44,39 @@ Apres insertion de 82 :
 
 Regles respectees : oui
 
-===== 40 20 10 30 25 35 37 38 =====
-
-Apres insertion de 40 :
-40N
-
-Apres insertion de 20 :
-40N
-      20R
-
-Apres insertion de 10 :
-      40R
-20N
-      10R
-
-Apres insertion de 30 :
-      40N
-            30R
-20N
-      10N
-
-Apres insertion de 25 :
-            40R
-      30N
-            25R
-20N
-      10N
-
-Apres insertion de 35 :
-            40N
-                  35R
-      30R
-            25N
-20N
-      10N
-
-Apres insertion de 37 :
-                  40R
-            37N
-                  35R
-      30R
-            25N
-20N
-      10N
-
-Apres insertion de 38 :
-            40N
-                  38R
-      37R
-            35N
-30N
-            25N
-      20R
-            10N
-
+Apres suppression de 2 :
+            84R
+      82N
+            58R
+48N
+            17R
+      7N
 Regles respectees : oui
 
-===== Examen : 1 2 3 8 9 12 13 14 =====
+Apres suppression de 58 :
+            84R
+      82N
+48N
+            17R
+      7N
+Regles respectees : oui
 
-Apres insertion de 1 :
-1N
+Apres suppression de 48 :
+      84N
+82N
+            17R
+      7N
+Regles respectees : oui
 
-Apres insertion de 2 :
-      2R
-1N
+Apres suppression de 7 :
+      84N
+82N
+      17N
+Regles respectees : oui
 
-Apres insertion de 3 :
-      3R
-2N
-      1R
-
-Apres insertion de 8 :
-            8R
-      3N
-2N
-      1N
-
-Apres insertion de 9 :
-            9R
-      8N
-            3R
-2N
-      1N
-
-Apres insertion de 12 :
-                  12R
-            9N
-      8R
-            3N
-2N
-      1N
-
-Apres insertion de 13 :
-                  13R
-            12N
-                  9R
-      8R
-            3N
-2N
-      1N
-
-Apres insertion de 14 :
-                  14R
-            13N
-      12R
-            9N
-8N
-            3N
-      2R
-            1N
-
+Apres suppression de 99 (absent) :
+      84N
+82N
+      17N
 Regles respectees : oui
 

@@ -1,4 +1,4 @@
-// Arbre rouge-noir ecrit a la main : insertion, recherche, rotations, verification des regles
+// Arbre rouge-noir ecrit a la main : insertion, suppression, recherche, rotations, verification des regles
 #pragma once
 #include <iostream>
 #include <string>
@@ -107,6 +107,78 @@ private:
         racine->couleur = NOIR;                      // la racine est toujours noire
     }
 
+    // Remplace le sous-arbre de racine u par le sous-arbre de racine v (v peut etre nullptr)
+    void transplanter(NoeudRN* u, NoeudRN* v)
+    {
+        if (u->parent == nullptr)          racine = v;
+        else if (u == u->parent->gauche)   u->parent->gauche = v;
+        else                               u->parent->droite = v;
+        if (v != nullptr) v->parent = u->parent;
+    }
+
+    static NoeudRN* minimum(NoeudRN* n) { while (n->gauche != nullptr) n = n->gauche; return n; }
+
+    // Reparer apres suppression d'un noeud NOIR.
+    // x a un "noir en trop" (double noir) : il manque un noir sur les chemins qui passent par x.
+    // x peut etre nullptr, c'est pourquoi on garde aussi son parent p.
+    void reparerSuppression(NoeudRN* x, NoeudRN* p)
+    {
+        while (x != racine && couleurDe(x) == NOIR) {
+            if (x == p->gauche) {                    // ---- x est a GAUCHE ----
+                NoeudRN* frere = p->droite;          // existe forcement (hauteur noire >= 1)
+                if (couleurDe(frere) == ROUGE) {     // CAS 1 : frere rouge -> on se ramene aux cas 2-4
+                    frere->couleur = NOIR;
+                    p->couleur = ROUGE;
+                    rotationGauche(p);
+                    frere = p->droite;
+                }
+                if (couleurDe(frere->gauche) == NOIR && couleurDe(frere->droite) == NOIR) {
+                    frere->couleur = ROUGE;          // CAS 2 : neveux noirs -> le frere devient rouge,
+                    x = p;                           //         le probleme remonte au parent
+                    p = x->parent;
+                } else {
+                    if (couleurDe(frere->droite) == NOIR) {  // CAS 3 : neveu proche rouge, lointain noir
+                        frere->gauche->couleur = NOIR;
+                        frere->couleur = ROUGE;
+                        rotationDroite(frere);
+                        frere = p->droite;
+                    }
+                    frere->couleur = p->couleur;     // CAS 4 : neveu lointain rouge -> rotation, termine
+                    p->couleur = NOIR;
+                    frere->droite->couleur = NOIR;
+                    rotationGauche(p);
+                    x = racine;
+                }
+            } else {                                 // ---- x est a DROITE (miroir) ----
+                NoeudRN* frere = p->gauche;
+                if (couleurDe(frere) == ROUGE) {     // CAS 1
+                    frere->couleur = NOIR;
+                    p->couleur = ROUGE;
+                    rotationDroite(p);
+                    frere = p->gauche;
+                }
+                if (couleurDe(frere->droite) == NOIR && couleurDe(frere->gauche) == NOIR) {
+                    frere->couleur = ROUGE;          // CAS 2
+                    x = p;
+                    p = x->parent;
+                } else {
+                    if (couleurDe(frere->gauche) == NOIR) {  // CAS 3
+                        frere->droite->couleur = NOIR;
+                        frere->couleur = ROUGE;
+                        rotationGauche(frere);
+                        frere = p->gauche;
+                    }
+                    frere->couleur = p->couleur;     // CAS 4
+                    p->couleur = NOIR;
+                    frere->gauche->couleur = NOIR;
+                    rotationDroite(p);
+                    x = racine;
+                }
+            }
+        }
+        if (x != nullptr) x->couleur = NOIR;         // un rouge qui recoit le noir en trop devient noir
+    }
+
     void afficher(NoeudRN* n, int espace) const
     {
         if (n == nullptr) return;
@@ -154,6 +226,53 @@ public:
         else                            parent->droite = z;
 
         reparerInsertion(z);
+    }
+
+    // Suppression : 1) retirer comme dans un ABR   2) reparer si on a retire un noeud NOIR
+    // Les noeuds sont deplaces (on change les pointeurs), jamais les valeurs copiees :
+    // seul le noeud supprime disparait, les autres restent a la meme adresse (comme std::map).
+    // Renvoie false si la valeur est absente.
+    bool supprimer(int v)
+    {
+        NoeudRN* z = racine;                         // chercher le noeud
+        while (z != nullptr && z->valeur != v)
+            z = (v < z->valeur) ? z->gauche : z->droite;
+        if (z == nullptr) return false;
+
+        Couleur couleurRetiree = z->couleur;         // couleur du noeud qui quitte vraiment sa place
+        NoeudRN* x;                                  // noeud qui prend cette place (peut etre nullptr)
+        NoeudRN* parentX;                            // son parent
+
+        if (z->gauche == nullptr) {                  // cas 1 : pas d'enfant gauche
+            x = z->droite;
+            parentX = z->parent;
+            transplanter(z, z->droite);
+        } else if (z->droite == nullptr) {           // cas 2 : pas d'enfant droit
+            x = z->gauche;
+            parentX = z->parent;
+            transplanter(z, z->gauche);
+        } else {                                     // cas 3 : deux enfants
+            NoeudRN* y = minimum(z->droite);         // successeur : il prendra la place de z
+            couleurRetiree = y->couleur;
+            x = y->droite;                           // y n'a pas d'enfant gauche
+            if (y->parent == z) {
+                parentX = y;
+            } else {
+                parentX = y->parent;
+                transplanter(y, y->droite);          // x remonte a la place de y
+                y->droite = z->droite;
+                y->droite->parent = y;
+            }
+            transplanter(z, y);                      // y prend la place de z...
+            y->gauche = z->gauche;
+            y->gauche->parent = y;
+            y->couleur = z->couleur;                 // ...et sa couleur
+        }
+        delete z;
+
+        if (couleurRetiree == NOIR)                  // retirer un rouge ne casse aucune regle
+            reparerSuppression(x, parentX);
+        return true;
     }
 
     // Recherche : exactement comme dans un ABR, O(log n) garanti car la hauteur est <= 2 log2(n+1)

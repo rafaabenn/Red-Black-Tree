@@ -7,7 +7,7 @@ Comparaison de quatre structures pour stocker des clés et les retrouver :
 | Structure | Ce que c'est |
 |---|---|
 | **ABR** | arbre binaire de recherche normal, **non équilibré** (écrit à la main) |
-| **Rouge-noir** | arbre rouge-noir **écrit à la main** : insertion, rotations, recoloration |
+| **Rouge-noir** | arbre rouge-noir **écrit à la main** : insertion, suppression, rotations, recoloration |
 | **`std::map`** | arbre rouge-noir de la bibliothèque standard |
 | **`std::unordered_map`** | table de hachage de la bibliothèque standard |
 
@@ -19,8 +19,8 @@ avec des clés insérées dans un ordre **aléatoire** puis dans l'ordre **crois
 ```
 src/
   ArbreBinaireRecherche.h   ABR non équilibré
-  ArbreRougeNoir.h          arbre rouge-noir (insertion, rotations, vérification des règles)
-  DemoRBT.cpp               insertion pas à pas, arbre affiché après chaque valeur
+  ArbreRougeNoir.h          arbre rouge-noir (insertion, suppression, rotations, vérification des règles)
+  DemoRBT.cpp               insertion puis suppression pas à pas, arbre affiché à chaque étape
   Benchmark.cpp             comparaison des 4 structures
 resultats/
   benchmark.txt             tableaux lisibles
@@ -29,20 +29,21 @@ resultats/
 
 ## Compiler et lancer
 
+Démonstration de l'arbre rouge-noir (insertion puis suppression pas à pas) :
+
 ```
-make          # compile dans bin/   (Windows : mingw32-make)
-make demo     # démonstration de l'arbre rouge-noir
-make bench    # benchmark (environ 30 secondes)
+g++ -O2 -std=c++17 src/DemoRBT.cpp -o DemoRBT
+./DemoRBT
 ```
 
-Sans make :
+Benchmark (environ une minute, résultats affichés dans la console) :
 
 ```
 g++ -O2 -std=c++17 src/Benchmark.cpp -o Benchmark
-./Benchmark          # résultats affichés dans la console
+./Benchmark
 ```
 
-Avant de mesurer, le benchmark vérifie que l'arbre rouge-noir respecte ses règles
+Avant de mesurer, le benchmark vérifie que l'arbre rouge-noir respecte ses règles après insertion et après suppression
 (racine noire, jamais deux rouges de suite, même nombre de noirs sur chaque chemin),
 et que chaque clé cherchée est bien trouvée.
 
