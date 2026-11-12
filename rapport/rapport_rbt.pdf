@@ -1,0 +1,641 @@
+\documentclass[12pt,a4paper]{report}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{lmodern}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{colortbl}
+\usepackage{listings}
+\usepackage{tikz}
+\usetikzlibrary{positioning}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.16}
+\usepackage{caption}
+\usepackage{float}
+\usepackage{etoolbox}
+\usepackage[colorlinks=true,linkcolor=blue!70!black,urlcolor=blue!70!black]{hyperref}
+
+\hypersetup{pdftitle={Benchmark arbre rouge-noir}, pdfauthor={BENNOUR RAFAA}}
+\captionsetup{labelsep=endash, font=small}
+\captionsetup[table]{position=above}
+\emergencystretch=2em
+\widowpenalty=10000 \clubpenalty=10000
+\setlist{itemsep=2pt}
+
+% ---------------- Code ----------------
+\definecolor{fondcode}{HTML}{F6F6F3}
+\definecolor{bordcode}{HTML}{CCCCCC}
+\definecolor{motcle}{HTML}{1F5FA8}
+\definecolor{commentaire}{HTML}{6E6E6E}
+\definecolor{ok}{HTML}{D4EDD4}
+\definecolor{ko}{HTML}{F6D1CC}
+\definecolor{cmain}{HTML}{1F5FA8}
+\definecolor{cpq}{HTML}{D35400}
+\lstset{
+  language=C++, basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{motcle}\bfseries, commentstyle=\color{commentaire}\itshape,
+  backgroundcolor=\color{fondcode}, frame=single, rulecolor=\color{bordcode},
+  columns=fullflexible, keepspaces=true, showstringspaces=false,
+  xleftmargin=4pt, xrightmargin=4pt, aboveskip=8pt, belowskip=8pt,
+  literate={é}{{\'e}}1 {è}{{\`e}}1 {à}{{\`a}}1 {ê}{{\^e}}1 {ç}{{\c{c}}}1
+           {ù}{{\`u}}1 {É}{{\'E}}1 {î}{{\^i}}1 {ô}{{\^o}}1 {û}{{\^u}}1 {â}{{\^a}}1
+}
+\lstdefinestyle{sortie}{language={}, basicstyle=\ttfamily\scriptsize, keywordstyle={}, backgroundcolor=\color{white}}
+\BeforeBeginEnvironment{lstlisting}{\par\noindent\begin{minipage}{\linewidth}}
+\AfterEndEnvironment{lstlisting}{\end{minipage}\par}
+
+% ---------------- Arbres ----------------
+\tikzset{
+  noeud/.style={circle, draw=black!70, fill=blue!8, minimum size=7mm, inner sep=0pt, font=\small},
+  racine/.style={noeud, fill=orange!30},
+  level distance=11mm,
+}
+\tikzset{
+  rn/.style={circle, draw=black, fill=black!85, text=white, minimum size=7mm, inner sep=0pt, font=\small},
+  rr/.style={circle, draw=red!70!black, fill=red!75!black, text=white, minimum size=7mm, inner sep=0pt, font=\small},
+  nil/.style={rectangle, draw=black!50, fill=black!10, minimum size=4mm, inner sep=1pt, font=\tiny},
+}
+\definecolor{cabr}{HTML}{7F7F7F}
+\definecolor{crn}{HTML}{C0392B}
+\definecolor{cmap}{HTML}{1F5FA8}
+\definecolor{cum}{HTML}{1E8449}
+
+% =====================================================================
+% =====================================================================
+\begin{document}
+
+\begin{titlepage}
+  \centering
+  \vspace*{2cm}
+  {\huge Benchmark Comparatif\par}
+  \vspace{0.4cm}
+  {\LARGE Arbre rouge-noir\par}
+  \vspace{0.3cm}
+  {\Large ABR, rouge-noir, \texttt{std::map} et \texttt{std::unordered\_map}\par}
+  \vspace{1.3cm}
+  {\large Insertion, recherche et suppression de clés entières :\\[2pt]
+  analyse de performance comparative\par}
+  \vspace{1.3cm}
+  \begin{tikzpicture}[level distance=12mm, level 1/.style={sibling distance=34mm}, level 2/.style={sibling distance=17mm}]
+    \node[rn] {48}
+      child { node[rn] {7}
+        child { node[rr] {2} }
+        child { node[rr] {17} } }
+      child { node[rn] {82}
+        child { node[rr] {58} }
+        child { node[rr] {84} } };
+  \end{tikzpicture}
+  \vspace{1.3cm}
+
+  \begin{tabular}{r@{\quad}l}
+    \textbf{Auteur :} & BENNOUR RAFAA \\
+    \textbf{Formation :} & ILISI -- 2\textsuperscript{e} année \\
+    \textbf{Date :} & 11 novembre 2026 \\
+    \textbf{Langage :} & C++17 \\
+    \textbf{Compilateur :} & g++ 15.2 \texttt{-O2} \\
+  \end{tabular}
+\end{titlepage}
+
+\setcounter{tocdepth}{1}
+\tableofcontents
+
+% =====================================================================
+\chapter{Introduction}
+
+\section{Contexte et objectifs}
+Un arbre binaire de recherche (ABR) range les valeurs plus petites à gauche et les plus grandes à droite. Chercher, insérer ou supprimer une valeur coûte autant d'étapes que la \textbf{hauteur} de l'arbre. Le problème : si les valeurs arrivent triées, l'ABR devient une liste et sa hauteur vaut $n$.
+
+L'\textbf{arbre rouge-noir} corrige ce défaut : il donne une couleur à chaque nœud et se répare après chaque insertion et chaque suppression, par des recolorations et des rotations. Sa hauteur reste toujours inférieure à $2\log_2(n+1)$.
+
+Ce rapport compare quatre structures qui permettent de ranger des clés, de les retrouver et de les supprimer :
+\begin{description}[leftmargin=0.5cm, style=nextline]
+  \item[ABR] arbre binaire de recherche simple, \textbf{non équilibré}, écrit à la main ;
+  \item[Rouge-noir] arbre rouge-noir \textbf{écrit à la main} (insertion, suppression, rotations) ;
+  \item[\texttt{std::map}] l'arbre rouge-noir de la bibliothèque standard ;
+  \item[\texttt{std::unordered\_map}] la table de hachage de la bibliothèque standard.
+\end{description}
+
+\subsection{Objectifs de l'étude}
+\begin{enumerate}
+  \item Implémenter un arbre rouge-noir complet (insertion, suppression, rotations, recoloration) et vérifier qu'il respecte ses règles.
+  \item Mesurer l'effet de l'équilibrage, en insérant les clés dans un ordre \textbf{aléatoire} puis \textbf{croissant}.
+  \item Comparer notre arbre rouge-noir avec celui de la bibliothèque standard (\texttt{std::map}).
+  \item Situer les arbres face à une table de hachage (\texttt{std::unordered\_map}).
+\end{enumerate}
+
+\section{L'arbre rouge-noir}
+
+\subsection{Les cinq règles}
+\begin{enumerate}
+  \item Chaque nœud est rouge ou noir.
+  \item La racine est noire.
+  \item Les feuilles vides (NIL, \texttt{nullptr}) sont considérées comme noires.
+  \item Un nœud rouge n'a jamais d'enfant rouge.
+  \item Depuis un nœud, tous les chemins vers les feuilles passent par le même nombre de nœuds noirs.
+\end{enumerate}
+Les règles 4 et 5 garantissent l'équilibre : tous les chemins ont le même nombre $b$ de nœuds noirs, et on ne peut pas placer deux rouges à la suite, donc le chemin le plus long fait au plus $2b$ nœuds : il est \textbf{au plus deux fois plus long que le plus court}.
+
+\subsection{L'insertion}
+On insère comme dans un ABR, avec un nœud \textbf{rouge}. Si son parent est rouge, la règle 4 est cassée et on répare selon la couleur de l'\textbf{oncle} (le frère du parent) :
+
+\begin{center}
+\small
+\begin{tabular}{p{0.14\linewidth}p{0.30\linewidth}p{0.46\linewidth}}
+  \toprule
+  Cas & Situation & Réparation \\
+  \midrule
+  Cas 1 & oncle rouge & parent et oncle deviennent noirs, grand-parent rouge ; on recommence avec le grand-parent \\
+  Cas 2 & oncle noir, nœud en zigzag & rotation sur le parent pour se ramener au cas 3 \\
+  Cas 3 & oncle noir, nœud en ligne droite & rotation sur le grand-parent, puis échange des couleurs ; terminé \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Une \textbf{rotation} ne modifie que trois liens, elle coûte $O(1)$ :
+\begin{center}
+\begin{tikzpicture}[level distance=10mm, level 1/.style={sibling distance=16mm}, level 2/.style={sibling distance=10mm}]
+  \node[noeud] {x}
+    child { node[nil] {a} }
+    child { node[noeud] {y}
+      child { node[nil] {b} }
+      child { node[nil] {c} } };
+  \node at (2.6,-1) {\Large $\longrightarrow$};
+  \node at (2.6,-0.6) {\small rotation gauche};
+  \begin{scope}[xshift=5.2cm]
+  \node[noeud] {y}
+    child { node[noeud] {x}
+      child { node[nil] {a} }
+      child { node[nil] {b} } }
+    child { node[nil] {c} };
+  \end{scope}
+\end{tikzpicture}
+\end{center}
+Une insertion fait au plus deux rotations et $O(\log n)$ recolorations : elle coûte $O(\log n)$.
+
+\subsection{La suppression}
+On retire d'abord le nœud comme dans un ABR : s'il a deux enfants, son \textbf{successeur} (le minimum du sous-arbre droit) prend sa place et sa couleur. Si le nœud qui quitte vraiment sa place est \textbf{rouge}, aucune règle n'est cassée. S'il est \textbf{noir}, il manque un noir sur certains chemins (règle 5) : le nœud $x$ qui prend la place reçoit un « noir en trop » (on dit qu'il est \textbf{doublement noir}). Si $x$ est rouge, il devient simplement noir. Sinon, on répare selon le \textbf{frère} de $x$ et ses enfants (les \textbf{neveux}) :
+
+\begin{center}
+\small
+\begin{tabular}{p{0.14\linewidth}p{0.36\linewidth}p{0.40\linewidth}}
+  \toprule
+  Cas & Situation & Réparation \\
+  \midrule
+  Cas 1 & frère rouge & rotation sur le parent et échange des couleurs : le frère devient noir, on passe aux cas 2 à 4 \\
+  Cas 2 & frère noir, deux neveux noirs & le frère devient rouge ; le noir en trop remonte au parent \\
+  Cas 3 & frère noir, neveu proche rouge, neveu lointain noir & rotation sur le frère pour se ramener au cas 4 \\
+  Cas 4 & frère noir, neveu lointain rouge & rotation sur le parent et recoloration ; terminé \\
+  \bottomrule
+\end{tabular}
+\end{center}
+Une suppression fait au plus trois rotations et $O(\log n)$ recolorations : elle coûte aussi $O(\log n)$, mais elle fait plus de travail qu'une insertion (chercher le successeur, puis réparer).
+
+\section{Jeux de données}
+\begin{itemize}
+  \item Les clés sont les entiers $0, 1, \dots, N-1$, sans doublon, avec $N = 10^3$, $10^4$, $2\times10^4$, $10^5$ et $10^6$.
+  \item \textbf{Ordre aléatoire} : les clés sont mélangées (graine fixe).
+  \item \textbf{Ordre croissant} : les clés sont insérées triées. C'est le pire cas de l'ABR, qui n'est mesuré que jusqu'à $N = 20\,000$ (au-delà, son coût en $O(N^2)$ devient trop long).
+  \item Démonstration : insertion de 7 58 48 2 17 84 82, puis suppression de 2, 58, 48, 7 et 99 (absent).
+\end{itemize}
+
+\section{Opérations mesurées}
+\begin{itemize}
+  \item \textbf{Insertion} : insérer les $N$ clés dans une structure vide.
+  \item \textbf{Recherche} : chercher les $N$ clés, dans un autre ordre aléatoire. Toutes doivent être trouvées.
+  \item \textbf{Suppression} : supprimer les $N$ clés, dans ce même ordre aléatoire, jusqu'à vider la structure. Toutes doivent être supprimées.
+  \item \textbf{Hauteur} : nombre de niveaux des deux arbres écrits à la main, mesuré avant les suppressions (elle n'est pas accessible pour \texttt{std::map}).
+\end{itemize}
+Chaque résultat est un temps moyen par opération, en nanosecondes (ns).
+
+\section{Complexités théoriques}
+\begin{table}[H]
+\centering
+\caption{Complexités (cas moyen, avec le pire cas entre parenthèses).}
+\small
+\begin{tabular}{lcc}
+  \toprule
+  Structure & Insertion, recherche, suppression & Ordre des clés \\
+  \midrule
+  ABR & $O(\log n)$ \quad ($O(n)$) & trié \\
+  Rouge-noir / \texttt{map} & $O(\log n)$ garanti & trié \\
+  \texttt{unordered\_map} & $O(1)$ \quad ($O(n)$) & aucun \\
+  \bottomrule
+\end{tabular}
+\end{table}
+
+% =====================================================================
+\chapter{Méthodologie}
+
+\section{Environnement}
+\begin{itemize}
+  \item Ordinateur portable : Intel Core i7-8550U, 8~Go de mémoire, Windows 11.
+  \item Compilateur MinGW g++ 15.2, options \texttt{-O2 -std=c++17}.
+  \item Les temps dépendent de la machine ; les tendances restent les mêmes d'un PC à l'autre.
+\end{itemize}
+
+\section{Protocole de mesure}
+\begin{itemize}
+  \item Chronomètre : \texttt{std::chrono::steady\_clock}.
+  \item Chaque mesure est faite 3 fois et l'on garde le meilleur temps.
+  \item Les quatre structures reçoivent exactement les mêmes clés et les mêmes requêtes.
+  \item \textbf{Vérifications} avant les mesures, sur $100\,000$ clés : l'arbre rouge-noir respecte ses règles après les insertions (aléatoires et croissantes), puis après la suppression d'une clé sur deux ; les bonnes clés sont encore présentes ; et l'arbre est vide une fois toutes les clés supprimées.
+  \item \textbf{Vérifications} pendant les mesures : chaque clé cherchée est trouvée et chaque clé supprimée était bien présente.
+\end{itemize}
+
+\section{Implémentation}
+
+\subsection{Le nœud}
+Le nœud rouge-noir a un pointeur vers son \textbf{parent}, nécessaire pour remonter vers le grand-parent, l'oncle ou le frère.
+\begin{lstlisting}
+enum Couleur { ROUGE, NOIR };
+struct NoeudRN {
+    int valeur;
+    Couleur couleur = ROUGE;               // tout nouveau noeud est rouge
+    NoeudRN *gauche = nullptr, *droite = nullptr, *parent = nullptr;
+};
+static Couleur couleurDe(NoeudRN* n) { return n == nullptr ? NOIR : n->couleur; }
+\end{lstlisting}
+
+\subsection{La rotation gauche}
+\begin{lstlisting}
+void rotationGauche(NoeudRN* x) {
+    NoeudRN* y = x->droite;
+    x->droite = y->gauche;                       // 1. b passe à droite de x
+    if (y->gauche != nullptr) y->gauche->parent = x;
+    y->parent = x->parent;                       // 2. y prend la place de x
+    if (x->parent == nullptr)        racine = y;
+    else if (x == x->parent->gauche) x->parent->gauche = y;
+    else                             x->parent->droite = y;
+    y->gauche = x;                               // 3. x passe à gauche de y
+    x->parent = y;
+}
+\end{lstlisting}
+
+\subsection{La réparation après insertion}
+Le code ci-dessous traite le cas où le parent est l'enfant gauche du grand-parent ; l'autre côté est son miroir (gauche et droite inversés).
+\begin{lstlisting}
+while (z != racine && couleurDe(z->parent) == ROUGE) {
+    NoeudRN* p = z->parent;  NoeudRN* g = p->parent;
+    if (p == g->gauche) {
+        NoeudRN* oncle = g->droite;
+        if (couleurDe(oncle) == ROUGE) {           // CAS 1 : recolorer
+            p->couleur = NOIR; oncle->couleur = NOIR; g->couleur = ROUGE;
+            z = g;                                 // on remonte
+        } else {
+            if (z == p->droite) {                  // CAS 2 : zigzag
+                z = p; rotationGauche(z); p = z->parent;
+            }
+            p->couleur = NOIR; g->couleur = ROUGE; // CAS 3 : ligne droite
+            rotationDroite(g);
+        }
+    } else { /* miroir */ }
+}
+racine->couleur = NOIR;
+\end{lstlisting}
+
+\subsection{La suppression}
+Les nœuds sont déplacés en changeant les pointeurs (\texttt{transplanter}), jamais en recopiant les valeurs : seul le nœud supprimé disparaît.
+\begin{lstlisting}
+Couleur couleurRetiree = z->couleur;
+if (z->gauche == nullptr)       { x = z->droite; parentX = z->parent; transplanter(z, z->droite); }
+else if (z->droite == nullptr)  { x = z->gauche; parentX = z->parent; transplanter(z, z->gauche); }
+else {                                       // deux enfants : le successeur y prend la place
+    NoeudRN* y = minimum(z->droite);
+    couleurRetiree = y->couleur;  x = y->droite;
+    if (y->parent == z) parentX = y;
+    else { parentX = y->parent; transplanter(y, y->droite);
+           y->droite = z->droite; y->droite->parent = y; }
+    transplanter(z, y);
+    y->gauche = z->gauche; y->gauche->parent = y;
+    y->couleur = z->couleur;
+}
+delete z;
+if (couleurRetiree == NOIR) reparerSuppression(x, parentX);  // il manque un noir
+\end{lstlisting}
+
+\subsection{La réparation après suppression}
+Comme pour l'insertion, seul le côté gauche est montré ; l'autre côté est son miroir. Le nœud $x$ peut être vide, c'est pourquoi on garde aussi son parent $p$.
+\begin{lstlisting}
+while (x != racine && couleurDe(x) == NOIR) {
+    if (x == p->gauche) {
+        NoeudRN* frere = p->droite;
+        if (couleurDe(frere) == ROUGE) {                      // CAS 1
+            frere->couleur = NOIR; p->couleur = ROUGE;
+            rotationGauche(p); frere = p->droite;
+        }
+        if (couleurDe(frere->gauche) == NOIR && couleurDe(frere->droite) == NOIR) {
+            frere->couleur = ROUGE; x = p; p = x->parent;     // CAS 2 : on remonte
+        } else {
+            if (couleurDe(frere->droite) == NOIR) {           // CAS 3
+                frere->gauche->couleur = NOIR; frere->couleur = ROUGE;
+                rotationDroite(frere); frere = p->droite;
+            }
+            frere->couleur = p->couleur; p->couleur = NOIR;   // CAS 4 : terminé
+            frere->droite->couleur = NOIR;
+            rotationGauche(p); x = racine;
+        }
+    } else { /* miroir */ }
+}
+if (x != nullptr) x->couleur = NOIR;
+\end{lstlisting}
+
+\subsection{Organisation du projet}
+\begin{center}
+\small
+\begin{tabular}{ll}
+  \toprule
+  Fichier & Rôle \\
+  \midrule
+  \texttt{ArbreBinaireRecherche.h} & ABR non équilibré \\
+  \texttt{ArbreRougeNoir.h} & arbre rouge-noir et vérification des règles \\
+  \texttt{DemoRBT.cpp} & insertion puis suppression pas à pas \\
+  \texttt{Benchmark.cpp} & comparaison des quatre structures \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+% =====================================================================
+\chapter{Résultats : démonstration}
+
+\section{Insertion}
+Pour la suite 7 58 48 2 17 84 82, le programme affiche l'arbre ci-dessous (racine à gauche, R = rouge, N = noir). C'est le même arbre que celui obtenu à la main.
+\begin{lstlisting}[style=sortie]
+            84R
+      82N
+            58R
+48N
+            17R
+      7N
+            2R
+Regles respectees : oui
+\end{lstlisting}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[level distance=12mm, level 1/.style={sibling distance=36mm}, level 2/.style={sibling distance=18mm}]
+  \node[rn] {48}
+    child { node[rn] {7} child { node[rr] {2} } child { node[rr] {17} } }
+    child { node[rn] {82} child { node[rr] {58} } child { node[rr] {84} } };
+\end{tikzpicture}
+\caption{Arbre après les insertions : chaque chemin compte deux nœuds noirs.}
+\end{figure}
+Les étapes : 48 provoque un zigzag (cas 2 puis cas 3), 2 une recoloration (cas 1), 17 et 84 ne demandent rien, et 82 un nouveau zigzag.
+
+\section{Suppression}
+\begin{center}
+\small
+\begin{tabular}{lp{0.70\linewidth}}
+  \toprule
+  Suppression & Ce qui se passe \\
+  \midrule
+  2 et 58 & feuilles rouges : on les retire, aucune règle n'est cassée \\
+  48 (racine) & deux enfants : le successeur 82 prend sa place et sa couleur noire ; 82 était noir, donc il manque un noir sous lui, mais 84, qui monte à sa place, est rouge : il devient noir \\
+  7 & un seul enfant, 17 (rouge), qui monte et devient noir \\
+  99 & absente : la fonction renvoie \texttt{false}, l'arbre ne change pas \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[level distance=12mm, level 1/.style={sibling distance=26mm}]
+  \node[rn] {82}
+    child { node[rn] {17} }
+    child { node[rn] {84} };
+\end{tikzpicture}
+\caption{Arbre final après les suppressions : les règles sont toujours respectées.}
+\end{figure}
+Cette démonstration ne passe que par les cas simples. Les quatre cas de réparation (frère rouge, neveux noirs, etc.) sont exercés par la vérification du benchmark, qui supprime $50\,000$ clés dans un ordre aléatoire et contrôle ensuite les règles et le contenu de l'arbre.
+
+% =====================================================================
+\chapter{Résultats : clés en ordre aléatoire}
+
+\section{Données brutes}
+\begin{table}[H]
+\centering
+\caption{Ordre aléatoire : temps moyen par opération (ns). En vert, l'arbre le plus rapide.}
+\newcommand{\g}{\cellcolor{ok}}
+\small
+\begin{tabular}{rlrrrr}
+  \toprule
+  $N$ & Structure & Hauteur & Insertion & Recherche & Suppression \\
+  \midrule
+  1\,000 & ABR & 22 & 429.3 & 70.4 & 287.3 \\
+         & Rouge-noir & 12 & 414.5 & \g 50.5 & 328.3 \\
+         & \texttt{map} & -- & \g 302.1 & 107.6 & \g 225.8 \\
+         & \texttt{unordered\_map} & -- & 418.9 & 17.6 & 111.6 \\
+  \midrule
+  10\,000 & ABR & 29 & 509.8 & 125.4 & \g 250.4 \\
+          & Rouge-noir & 16 & 434.6 & \g 94.4 & 292.5 \\
+          & \texttt{map} & -- & \g 359.1 & 184.2 & 343.6 \\
+          & \texttt{unordered\_map} & -- & 233.4 & 18.0 & 134.2 \\
+  \midrule
+  20\,000 & ABR & 33 & \g 411.4 & 444.9 & 494.5 \\
+          & Rouge-noir & 18 & 445.8 & \g 104.5 & \g 418.6 \\
+          & \texttt{map} & -- & 490.3 & 242.1 & 766.8 \\
+          & \texttt{unordered\_map} & -- & 306.7 & 38.2 & 142.9 \\
+  \midrule
+  100\,000 & ABR & 41 & \g 550.0 & 303.9 & \g 499.3 \\
+           & Rouge-noir & 20 & 628.2 & \g 242.1 & 695.1 \\
+           & \texttt{map} & -- & 669.5 & 601.9 & 689.0 \\
+           & \texttt{unordered\_map} & -- & 346.4 & 34.6 & 262.1 \\
+  \midrule
+  1\,000\,000 & ABR & 50 & 1\,551.0 & 895.5 & \g 1\,401.5 \\
+              & Rouge-noir & 24 & \g 1\,365.1 & \g 708.1 & 1\,612.8 \\
+              & \texttt{map} & -- & 1\,397.9 & 1\,386.4 & 1\,822.6 \\
+              & \texttt{unordered\_map} & -- & 620.4 & 129.2 & 708.8 \\
+  \bottomrule
+\end{tabular}
+\end{table}
+
+\section{Visualisation}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{loglogaxis}[width=0.68\linewidth, height=6.5cm, xlabel={$N$}, ylabel={ns par recherche},
+  legend style={font=\small, at={(1.03,0.5)}, anchor=west}, grid=major, grid style={black!12}]
+  \addplot[cabr, thick, mark=triangle*] coordinates {(1000,70.4) (10000,125.4) (20000,444.9) (100000,303.9) (1000000,895.5)};
+  \addplot[crn, thick, mark=*] coordinates {(1000,50.5) (10000,94.4) (20000,104.5) (100000,242.1) (1000000,708.1)};
+  \addplot[cmap, thick, mark=square*] coordinates {(1000,107.6) (10000,184.2) (20000,242.1) (100000,601.9) (1000000,1386.4)};
+  \addplot[cum, thick, mark=diamond*] coordinates {(1000,17.6) (10000,18.0) (20000,38.2) (100000,34.6) (1000000,129.2)};
+  \legend{ABR, Rouge-noir, \texttt{map}, \texttt{unordered\_map}}
+\end{loglogaxis}
+\end{tikzpicture}
+\caption{Recherche, clés en ordre aléatoire (échelles logarithmiques).}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{loglogaxis}[width=0.68\linewidth, height=6.5cm, xlabel={$N$}, ylabel={ns par suppression},
+  legend style={font=\small, at={(1.03,0.5)}, anchor=west}, grid=major, grid style={black!12}]
+  \addplot[cabr, thick, mark=triangle*] coordinates {(1000,287.3) (10000,250.4) (20000,494.5) (100000,499.3) (1000000,1401.5)};
+  \addplot[crn, thick, mark=*] coordinates {(1000,328.3) (10000,292.5) (20000,418.6) (100000,695.1) (1000000,1612.8)};
+  \addplot[cmap, thick, mark=square*] coordinates {(1000,225.8) (10000,343.6) (20000,766.8) (100000,689.0) (1000000,1822.6)};
+  \addplot[cum, thick, mark=diamond*] coordinates {(1000,111.6) (10000,134.2) (20000,142.9) (100000,262.1) (1000000,708.8)};
+  \legend{ABR, Rouge-noir, \texttt{map}, \texttt{unordered\_map}}
+\end{loglogaxis}
+\end{tikzpicture}
+\caption{Suppression, clés en ordre aléatoire (échelles logarithmiques).}
+\end{figure}
+
+\section{Analyse}
+\begin{itemize}
+  \item \textbf{Hauteur} : avec des clés mélangées, l'ABR reste assez équilibré (50 niveaux pour un million de clés), mais le rouge-noir est \textbf{deux fois moins haut} (24 niveaux, proche de $\log_2 10^6 \approx 20$).
+  \item \textbf{Recherche} : le rouge-noir est le plus rapide des arbres pour toutes les tailles. À $10^6$, il cherche \textbf{1,3 fois plus vite} que l'ABR (708 contre 896~ns) : la recherche ne fait aucune réparation et profite entièrement de la hauteur plus faible.
+  \item \textbf{Insertion} : les trois arbres sont proches. \texttt{map} est devant pour les petites tailles ($10^3$, $10^4$), l'ABR à $2\times10^4$ et $10^5$, et notre rouge-noir à $10^6$ (1\,365 contre 1\,398~ns pour \texttt{map} et 1\,551~ns pour l'ABR).
+  \item \textbf{Suppression} : l'ABR est le plus rapide des arbres dans la plupart des cas (1\,402 contre 1\,613~ns pour le rouge-noir à $10^6$, soit 13~\% de moins). Avec des clés mélangées, il reste assez bas, et il n'a \textbf{aucune réparation} à faire, alors que le rouge-noir doit recolorer et parfois tourner après avoir retiré un nœud noir.
+  \item Pour le rouge-noir et \texttt{map}, la suppression est l'opération la plus chère à $10^6$ : il faut chercher le nœud, puis son successeur, puis réparer. Pour l'ABR, qui ne répare rien, elle coûte moins cher que l'insertion.
+  \item Les mesures sous Windows sont un peu bruitées : par exemple, la recherche dans l'ABR à $2\times10^4$ (445~ns) est plus lente qu'à $10^5$ (304~ns), ce qui n'a pas de raison théorique.
+\end{itemize}
+
+% =====================================================================
+\chapter{Résultats : clés en ordre croissant}
+
+\section{Données brutes}
+\begin{table}[H]
+\centering
+\caption{Ordre croissant : temps moyen par opération (ns). « -- » : non mesuré (trop long) ou sans objet.}
+\small
+\begin{tabular}{rlrrrr}
+  \toprule
+  $N$ & Structure & Hauteur & Insertion & Recherche & Suppression \\
+  \midrule
+  1\,000 & ABR & \cellcolor{ko} 1\,000 & \cellcolor{ko} 2\,850.5 & \cellcolor{ko} 3\,030.3 & \cellcolor{ko} 1\,205.1 \\
+         & Rouge-noir & 17 & 355.0 & 53.8 & 233.8 \\
+         & \texttt{map} & -- & 333.1 & 128.4 & 338.1 \\
+         & \texttt{unordered\_map} & -- & 402.5 & 23.0 & 176.3 \\
+  \midrule
+  10\,000 & ABR & \cellcolor{ko} 10\,000 & \cellcolor{ko} 32\,272.7 & \cellcolor{ko} 38\,824.4 & \cellcolor{ko} 17\,775.7 \\
+          & Rouge-noir & 24 & 240.7 & 116.7 & 263.1 \\
+          & \texttt{map} & -- & 213.1 & 210.4 & 408.1 \\
+          & \texttt{unordered\_map} & -- & 222.7 & 27.1 & 165.9 \\
+  \midrule
+  20\,000 & ABR & \cellcolor{ko} 20\,000 & \cellcolor{ko} 66\,420.1 & \cellcolor{ko} 84\,230.7 & \cellcolor{ko} 44\,145.6 \\
+          & Rouge-noir & 26 & 272.3 & 184.2 & 502.7 \\
+          & \texttt{map} & -- & 236.0 & 274.0 & 524.5 \\
+          & \texttt{unordered\_map} & -- & 171.7 & 23.0 & 152.7 \\
+  \midrule
+  100\,000 & Rouge-noir & 31 & 321.1 & 323.0 & 572.2 \\
+           & \texttt{map} & -- & 211.1 & 463.2 & 652.7 \\
+           & \texttt{unordered\_map} & -- & 198.3 & 36.2 & 278.9 \\
+  \midrule
+  1\,000\,000 & Rouge-noir & 37 & 407.6 & 661.8 & 1\,418.5 \\
+              & \texttt{map} & -- & 358.0 & 1\,314.4 & 1\,541.9 \\
+              & \texttt{unordered\_map} & -- & 247.8 & 81.4 & 595.1 \\
+  \bottomrule
+\end{tabular}
+\end{table}
+
+\section{Visualisation}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{loglogaxis}[width=0.68\linewidth, height=6.5cm, xlabel={$N$}, ylabel={ns par insertion},
+  legend style={font=\small, at={(1.03,0.5)}, anchor=west}, grid=major, grid style={black!12}]
+  \addplot[cabr, thick, mark=triangle*] coordinates {(1000,2850.5) (10000,32272.7) (20000,66420.1)};
+  \addplot[crn, thick, mark=*] coordinates {(1000,355.0) (10000,240.7) (20000,272.3) (100000,321.1) (1000000,407.6)};
+  \addplot[cmap, thick, mark=square*] coordinates {(1000,333.1) (10000,213.1) (20000,236.0) (100000,211.1) (1000000,358.0)};
+  \addplot[cum, thick, mark=diamond*] coordinates {(1000,402.5) (10000,222.7) (20000,171.7) (100000,198.3) (1000000,247.8)};
+  \legend{ABR, Rouge-noir, \texttt{map}, \texttt{unordered\_map}}
+\end{loglogaxis}
+\end{tikzpicture}
+\caption{Insertion, clés en ordre croissant : l'ABR dégénère, les autres restent plats.}
+\end{figure}
+
+\section{Analyse}
+\begin{itemize}
+  \item \textbf{L'ABR dégénère} : chaque clé est plus grande que toutes les précédentes et part toujours à droite. L'arbre devient une liste (hauteur $= N$), et quand $N$ double, le temps par opération double aussi. À $N = 20\,000$, il est \textbf{environ 240 fois plus lent} à l'insertion que le rouge-noir (66\,420 contre 272~ns), \textbf{460 fois} à la recherche (84\,231 contre 184~ns) et \textbf{90 fois} à la suppression (44\,146 contre 503~ns).
+  \item La suppression de l'ABR souffre un peu moins : les clés sont supprimées dans un ordre aléatoire, et la liste raccourcit au fur et à mesure.
+  \item \textbf{Le rouge-noir reste équilibré} : 37 niveaux pour un million de clés, sous la borne $2\log_2(n+1) \approx 40$. Les rotations corrigent la pente à mesure.
+  \item \texttt{map} insère un peu plus vite que notre rouge-noir dans tous les cas en ordre croissant (358 contre 408~ns à $10^6$), mais notre rouge-noir reste plus rapide en recherche et en suppression.
+  \item L'insertion croissante est \textbf{plus rapide} qu'en ordre aléatoire pour les arbres équilibrés (408 contre 1\,365~ns à $10^6$ pour le rouge-noir) : la descente suit toujours le même chemin, à droite, que le processeur garde en cache et prévoit sans erreur.
+\end{itemize}
+
+% =====================================================================
+\chapter{Analyse comparative approfondie}
+
+\section{Notre arbre rouge-noir face à \texttt{std::map}}
+Les deux structures sont des arbres rouge-noir construits avec le même algorithme : elles ont la même forme et la même hauteur. Pourtant, notre version \textbf{cherche environ 2 fois plus vite} (708 contre 1\,386~ns à $10^6$ en aléatoire, 662 contre 1\,314~ns en croissant), et, à partir de $2\times10^4$ clés, elle supprime aussi plus vite (1\,613 contre 1\,823~ns à $10^6$). \texttt{map} n'est devant qu'à l'insertion (petites tailles et ordre croissant) et à la suppression de $1\,000$ clés.
+
+L'écart de recherche vient du code machine produit par le compilateur :
+\begin{itemize}
+  \item Notre boucle \texttt{c = (v < c->valeur) ? c->gauche : c->droite;} est traduite en une instruction \texttt{cmov} (déplacement conditionnel) : le choix entre gauche et droite se fait \textbf{sans branchement}, et le processeur n'a rien à deviner.
+  \item \texttt{map::find} descend avec un \texttt{if} que le processeur doit prédire. Avec des clés aléatoires, il se trompe environ une fois sur deux, et chaque erreur coûte une quinzaine de cycles.
+  \item \texttt{map::find} descend toujours jusqu'en bas de l'arbre (recherche de type \texttt{lower\_bound}), alors que notre recherche s'arrête dès qu'elle trouve la clé.
+  \item Un nœud de \texttt{map<int,int>} est plus gros : il stocke une paire clé-valeur.
+\end{itemize}
+\texttt{std::map} reste plus générale : elle accepte n'importe quel type et n'importe quel comparateur, et fournit des itérateurs. Notre arbre ne stocke que des \texttt{int}.
+
+\section{ABR ou rouge-noir : le prix de l'équilibrage}
+En ordre aléatoire, l'équilibrage n'apporte qu'un gain modeste : le rouge-noir cherche 1,3 fois plus vite, insère à peu près aussi vite, et \textbf{supprime même plus lentement} que l'ABR, à cause de la réparation. En ordre croissant, en revanche, il évite un effondrement d'un facteur 90 à 460. L'équilibrage est donc une \textbf{assurance} : un petit coût dans le cas favorable, contre une protection totale dans le pire cas.
+
+\section{Les arbres face à la table de hachage}
+\texttt{unordered\_map} est la plus rapide presque partout : à $10^6$ en aléatoire, elle cherche environ \textbf{5,5 fois plus vite} que le rouge-noir (129 contre 708~ns), insère et supprime environ 2 fois plus vite. Elle calcule directement la case de la clé au lieu de descendre une vingtaine de niveaux. Seule exception : avec $1\,000$ clés en aléatoire, son insertion (419~ns) n'est pas meilleure que celle des arbres, car le coût de création et d'agrandissement de la table pèse plus lourd que le gain du hachage.
+
+Mais elle ne garde \textbf{aucun ordre} : impossible d'obtenir les clés triées, le minimum, le maximum ou toutes les clés d'un intervalle. Son temps $O(1)$ n'est qu'une moyenne : avec beaucoup de collisions, il devient $O(n)$, et l'agrandissement de la table recopie tout d'un coup.
+
+\section{Mémoire}
+\begin{table}[H]
+\centering
+\caption{Taille d'un nœud sur une machine 64 bits (hors surcoût de \texttt{new}).}
+\small
+\begin{tabular}{lll}
+  \toprule
+  Structure & Contenu d'un nœud & Taille \\
+  \midrule
+  ABR & clé + 2 pointeurs & 24 octets \\
+  Rouge-noir & clé + couleur + 3 pointeurs & 32 octets \\
+  \texttt{map<int,int>} & couleur + 3 pointeurs + paire clé-valeur & 40 octets \\
+  \texttt{unordered\_map<int,int>} & pointeur suivant + paire, + un tableau de cases & 16 octets + cases \\
+  \bottomrule
+\end{tabular}
+\end{table}
+L'équilibrage coûte un pointeur \texttt{parent} et une couleur par nœud, soit 8~Mo de plus pour un million de clés : un prix faible face au gain de hauteur.
+
+\section{Bilan}
+\begin{table}[H]
+\centering
+\caption{Quelle structure choisir ?}
+\small
+\begin{tabular}{p{0.30\linewidth}p{0.28\linewidth}p{0.32\linewidth}}
+  \toprule
+  Besoin & Structure & Raison \\
+  \midrule
+  Savoir si une clé existe & \texttt{unordered\_map} / \texttt{unordered\_set} & $O(1)$ en moyenne, la plus rapide \\
+  Clés triées, minimum, intervalles & \texttt{map} / \texttt{set} & arbre rouge-noir, $O(\log n)$ garanti \\
+  Données pouvant arriver triées & jamais un ABR simple & dégénère en liste \\
+  Comprendre l'équilibrage & arbre écrit à la main & tout le fonctionnement est visible \\
+  \bottomrule
+\end{tabular}
+\end{table}
+
+% =====================================================================
+\chapter{Conclusion}
+
+\section{Synthèse des résultats}
+\begin{enumerate}
+  \item Notre arbre rouge-noir est correct : il donne les mêmes arbres que les exercices faits à la main, et ses règles sont vérifiées automatiquement après les insertions et après les suppressions.
+  \item Avec des clés triées, l'ABR devient une liste : à $N = 20\,000$, il est environ \textbf{240 fois plus lent} à l'insertion, \textbf{460 fois} à la recherche et \textbf{90 fois} à la suppression que le rouge-noir, qui garde une hauteur de 37 pour un million de clés.
+  \item Avec des clés mélangées, le rouge-noir \textbf{cherche 1,3 fois plus vite} que l'ABR, insère à peu près aussi vite, mais supprime environ 13~\% plus lentement, à cause de la réparation des couleurs.
+  \item Notre rouge-noir cherche environ \textbf{2 fois plus vite que \texttt{std::map}}, grâce à une boucle de recherche sans branchement et à un arrêt dès que la clé est trouvée ; \texttt{map} est un peu plus rapide à l'insertion en ordre croissant.
+  \item \texttt{unordered\_map} est la plus rapide (environ 5,5 fois plus rapide que le rouge-noir pour chercher), mais ne garde aucun ordre.
+\end{enumerate}
+
+\section{Recommandations}
+\begin{itemize}
+  \item Pour un dictionnaire sans besoin d'ordre : \texttt{unordered\_map}.
+  \item Pour des données triées ou des requêtes par intervalle : \texttt{map}, qui garantit $O(\log n)$ quel que soit l'ordre d'arrivée.
+  \item Un ABR simple ne convient que si l'on sait que les données arrivent dans un ordre aléatoire.
+  \item Pour des mesures plus stables, répéter le benchmark davantage de fois et fermer les autres programmes : les mesures sous Windows sont un peu bruitées.
+\end{itemize}
+
+\section{Conclusion finale}
+L'équilibrage ne rend pas chaque opération plus rapide : en ordre aléatoire, l'ABR insère aussi vite que le rouge-noir et supprime même plus vite. Son vrai rôle est de donner une \textbf{garantie} : quel que soit l'ordre d'arrivée des données, la hauteur reste en $O(\log n)$. Cette garantie évite l'effondrement de l'ABR face à des données triées, pour un coût de quelques recolorations, d'au plus deux rotations par insertion et trois par suppression, et d'un pointeur de plus par nœud.
+
+\end{document}
