@@ -3,3 +3,9 @@ bin/
 *.o
 *.out
 .vscode/
+# fichiers temporaires LaTeX
+rapport/*.aux
+rapport/*.log
+rapport/*.toc
+rapport/*.synctex.gz
+rapport/*.out

@@ -2,6 +2,8 @@
 //   ./bin/Benchmark        (resultats affiches dans la console)
 // Pour chaque structure : insertion de N cles, recherche des N cles dans un ordre aleatoire,
 // puis suppression des N cles dans ce meme ordre aleatoire.
+// Scenarios : cles aleatoires, cles croissantes (pire cas de l'ABR),
+// collisions (k cles par case de la table de hachage, k = 1, 10, 100, 1000 : pire cas de unordered_map).
 #include <iostream>
 #include <iomanip>
 #include <sstream>
@@ -11,6 +13,7 @@
 #include <random>
 #include <numeric>
 #include <algorithm>
+#include <climits>
 #include <map>
 #include <unordered_map>
 #include "ArbreBinaireRecherche.h"
@@ -21,7 +24,7 @@ using namespace std::chrono;
 struct Mesure { double inserer = -1, rechercher = -1, supprimer = -1; int hauteur = -1; };
 
 const int ESSAIS = 3;
-const int MAX_ABR_CROISSANT = 20000;   // au-dela, l'ABR degenere est trop lent (O(N^2))
+const int MAX_ABR_CROISSANT = 10000;   // au-dela, l'ABR degenere est trop lent (O(N^2))
 
 double ns(steady_clock::time_point t0) { return duration<double, nano>(steady_clock::now() - t0).count(); }
 
@@ -58,11 +61,94 @@ Mesure mesurer(const vector<int>& cles, const vector<int>& requetes, Ins inserer
     return meilleure;
 }
 
+// Les 4 structures, mesurees avec les memes fonctions partout
+Mesure mesurerABR(const vector<int>& cles, const vector<int>& requetes)
+{
+    return mesurer<ABR>(cles, requetes,
+        [](ABR& s, int x) { s.inserer(x); },
+        [](const ABR& s, int x) { return s.rechercher(x); },
+        [](ABR& s, int x) { return s.supprimer(x); },
+        [](const ABR& s) { return s.hauteur(); });
+}
+Mesure mesurerRougeNoir(const vector<int>& cles, const vector<int>& requetes)
+{
+    return mesurer<ArbreRougeNoir>(cles, requetes,
+        [](ArbreRougeNoir& s, int x) { s.inserer(x); },
+        [](const ArbreRougeNoir& s, int x) { return s.rechercher(x); },
+        [](ArbreRougeNoir& s, int x) { return s.supprimer(x); },
+        [](const ArbreRougeNoir& s) { return s.hauteur(); });
+}
+Mesure mesurerMap(const vector<int>& cles, const vector<int>& requetes)
+{
+    return mesurer<map<int, int>>(cles, requetes,
+        [](map<int, int>& s, int x) { s.emplace(x, x); },
+        [](const map<int, int>& s, int x) { return s.find(x) != s.end(); },
+        [](map<int, int>& s, int x) { return s.erase(x) == 1; },
+        [](const map<int, int>&) { return -1; });           // hauteur non accessible
+}
+template <typename Table>                                    // unordered_map ou TableReservee
+Mesure mesurerTable(const vector<int>& cles, const vector<int>& requetes)
+{
+    return mesurer<Table>(cles, requetes,
+        [](Table& s, int x) { s.emplace(x, x); },
+        [](const Table& s, int x) { return s.find(x) != s.end(); },
+        [](Table& s, int x) { return s.erase(x) == 1; },
+        [](const Table&) { return -1; });                   // pas un arbre
+}
+
+// Scenario "collisions" (pire cas de la table de hachage).
+// Avec g++, std::hash<int> renvoie la cle elle-meme et la case vaut (cle % B), B = nombre de cases.
+// On fixe B des la construction (reserve) pour que la table ne se redimensionne jamais :
+// deux cles qui ont le meme reste modulo B tombent dans la meme case et forment une liste chainee.
+int CASES_RESERVEES = 0;
+struct TableReservee : unordered_map<int, int> { TableReservee() { reserve(CASES_RESERVEES); } };
+
+// Cles avec exactement k cles par case : on utilise M = N/k cases, et dans la case c on met
+// les cles c, c+B, c+2B, ..., c+(k-1)B  (toutes ont le meme reste c modulo B).
+// k = 1 : aucune collision (cas normal). k = N : toutes les cles dans la meme case.
+vector<int> clesAvecCollisions(int N, int k, long long B)
+{
+    int M = (N + k - 1) / k;                                 // nombre de cases utilisees
+    vector<int> cles(N);
+    for (int i = 0; i < N; i++) cles[i] = (int)(i % M + (long long)(i / M) * B);
+    shuffle(cles.begin(), cles.end(), mt19937(42));
+    return cles;
+}
+
 string cellule(double v) { if (v < 0) return "-"; ostringstream o; o << fixed << setprecision(1) << v; return o.str(); }
 
-int main()
+// Resultats d'un scenario : r[N][structure]
+typedef map<int, map<string, Mesure>> Resultats;
+
+// Un tableau par operation : les structures en colonnes, les tailles N en lignes
+void afficherTableaux(const vector<string>& colonnes, const vector<int>& tailles, const Resultats& r)
 {
-    const char* noms[4] = {"ABR", "Rouge-noir", "map", "unordered_map"};
+    const int LARG = 14;
+    auto tableau = [&](const string& titre, const vector<string>& cols, auto valeur) {
+        cout << left << setw(16) << titre;
+        for (const string& c : cols) cout << right << setw(LARG) << c;
+        cout << "\n" << string(16 + LARG * cols.size(), '-') << "\n";
+        for (int N : tailles) {
+            cout << left << setw(16) << N;
+            for (const string& c : cols) cout << right << setw(LARG) << valeur(r.at(N).at(c));
+            cout << "\n";
+        }
+        cout << "\n";
+    };
+    tableau("Insertion (ns)",   colonnes, [](const Mesure& m) { return cellule(m.inserer); });
+    tableau("Recherche (ns)",   colonnes, [](const Mesure& m) { return cellule(m.rechercher); });
+    tableau("Suppression (ns)", colonnes, [](const Mesure& m) { return cellule(m.supprimer); });
+    tableau("Hauteur", {"ABR", "Rouge-noir"},
+            [](const Mesure& m) { return m.hauteur < 0 ? string("-") : to_string(m.hauteur); });
+}
+
+void progression(const string& scenario, int N) { cerr << "  mesure : " << scenario << ", N = " << N << "\n"; }
+
+int main(int argc, char** argv)
+{
+    // "Benchmark rapide" : seulement N = 1000, pour verifier que tout marche en quelques secondes
+    bool rapide = argc > 1 && string(argv[1]) == "rapide";
+    vector<int> tailles = rapide ? vector<int>{1000} : vector<int>{1000, 10000, 100000, 1000000, 2000000};
 
     // Verification : l'arbre rouge-noir respecte ses regles sur 100 000 cles aleatoires et croissantes
     {
@@ -86,50 +172,71 @@ int main()
 
     cout << "Temps moyen par operation, en nanosecondes. '-' = non mesure (trop long) ou sans objet.\n";
 
+    // ---------- Scenarios 1 et 2 : ordre aleatoire, ordre croissant ----------
     for (string ordre : {"aleatoire", "croissant"}) {
-        cout << "\n=== Cles inserees dans l'ordre " << ordre << " ===\n\n";
-        cout << left << setw(10) << "N" << setw(16) << "Structure" << right
-             << setw(10) << "Hauteur" << setw(13) << "Insertion" << setw(13) << "Recherche"
-             << setw(13) << "Suppression" << "\n";
-        cout << string(75, '-') << "\n";
-        for (int N : {1000, 10000, 20000, 100000, 1000000}) {
+        Resultats r;
+        for (int N : tailles) {
+            progression(ordre, N);
             vector<int> cles(N);
             iota(cles.begin(), cles.end(), 0);
             if (ordre == "aleatoire") shuffle(cles.begin(), cles.end(), mt19937(42));
             vector<int> requetes = cles;
             shuffle(requetes.begin(), requetes.end(), mt19937(7));
 
-            Mesure m[4];
-            if (ordre == "aleatoire" || N <= MAX_ABR_CROISSANT)
-                m[0] = mesurer<ABR>(cles, requetes,
-                    [](ABR& s, int x) { s.inserer(x); },
-                    [](const ABR& s, int x) { return s.rechercher(x); },
-                    [](ABR& s, int x) { return s.supprimer(x); },
-                    [](const ABR& s) { return s.hauteur(); });
-            m[1] = mesurer<ArbreRougeNoir>(cles, requetes,
-                [](ArbreRougeNoir& s, int x) { s.inserer(x); },
-                [](const ArbreRougeNoir& s, int x) { return s.rechercher(x); },
-                [](ArbreRougeNoir& s, int x) { return s.supprimer(x); },
-                [](const ArbreRougeNoir& s) { return s.hauteur(); });
-            m[2] = mesurer<map<int, int>>(cles, requetes,
-                [](map<int, int>& s, int x) { s.emplace(x, x); },
-                [](const map<int, int>& s, int x) { return s.find(x) != s.end(); },
-                [](map<int, int>& s, int x) { return s.erase(x) == 1; },
-                [](const map<int, int>&) { return -1; });           // hauteur non accessible
-            m[3] = mesurer<unordered_map<int, int>>(cles, requetes,
-                [](unordered_map<int, int>& s, int x) { s.emplace(x, x); },
-                [](const unordered_map<int, int>& s, int x) { return s.find(x) != s.end(); },
-                [](unordered_map<int, int>& s, int x) { return s.erase(x) == 1; },
-                [](const unordered_map<int, int>&) { return -1; }); // pas un arbre
+            if (ordre == "aleatoire" || N <= MAX_ABR_CROISSANT) r[N]["ABR"] = mesurerABR(cles, requetes);
+            else                                                r[N]["ABR"] = Mesure();   // non mesure
+            r[N]["Rouge-noir"]    = mesurerRougeNoir(cles, requetes);
+            r[N]["map"]           = mesurerMap(cles, requetes);
+            r[N]["unordered_map"] = mesurerTable<unordered_map<int, int>>(cles, requetes);
+        }
+        cout << "\n=== Cles inserees dans l'ordre " << ordre << " ===\n\n";
+        afficherTableaux({"ABR", "Rouge-noir", "map", "unordered_map"}, tailles, r);
+    }
 
-            for (int k = 0; k < 4; k++) {
-                cout << left << setw(10) << (k == 0 ? to_string(N) : "") << setw(16) << noms[k] << right
-                     << setw(10) << (m[k].hauteur < 0 ? string("-") : to_string(m[k].hauteur))
-                     << setw(13) << cellule(m[k].inserer) << setw(13) << cellule(m[k].rechercher)
-                     << setw(13) << cellule(m[k].supprimer) << "\n";
+    // ---------- Scenario 3 : collisions dans la table de hachage ----------
+    // k = nombre de cles par case. Plus k est grand, plus la liste a parcourir dans chaque case est longue.
+    // Les arbres ne dependent que de l'ordre des cles, pas de leur case : on les mesure une seule fois
+    // (avec les cles du niveau k = 1000) pour montrer qu'ils ne sont pas genes.
+    const int NIVEAUX[] = {1, 10, 100, 1000};
+    Resultats r;
+    vector<string> colonnes = {"ABR", "Rouge-noir", "map"};
+    for (int k : NIVEAUX) colonnes.push_back("u_map k=" + to_string(k));
+    string cases;                                            // "N : B" pour chaque N
+    for (int N : tailles) {
+        progression("collisions", N);
+        CASES_RESERVEES = N;
+        long long B = TableReservee().bucket_count();
+        cases += "  " + to_string(N) + " : " + to_string(B);
+
+        vector<int> clesArbres = clesAvecCollisions(N, 1000, B);
+        vector<int> reqArbres = clesArbres;
+        shuffle(reqArbres.begin(), reqArbres.end(), mt19937(7));
+        r[N]["ABR"]        = mesurerABR(clesArbres, reqArbres);
+        r[N]["Rouge-noir"] = mesurerRougeNoir(clesArbres, reqArbres);
+        r[N]["map"]        = mesurerMap(clesArbres, reqArbres);
+
+        for (int k : NIVEAUX) {
+            string nom = "u_map k=" + to_string(k);
+            if ((long long)(k - 1) * B + N > INT_MAX) {          // la plus grande cle ne tient pas dans un int
+                r[N][nom] = Mesure();
+                continue;
             }
-            cout << "\n";
+            vector<int> cles = clesAvecCollisions(N, k, B);
+            vector<int> requetes = cles;
+            shuffle(requetes.begin(), requetes.end(), mt19937(7));
+
+            // Verification : la table ne s'est pas agrandie et la case la plus remplie contient bien k cles
+            TableReservee t;
+            for (int x : cles) t.emplace(x, x);
+            size_t pire = 0;
+            for (size_t c = 0; c < t.bucket_count(); c++) pire = max(pire, t.bucket_size(c));
+            if ((long long)t.bucket_count() != B || pire != (size_t)min(k, N))
+                cout << "ATTENTION : repartition des cles inattendue (autre compilateur que g++ ?)\n";
+
+            r[N][nom] = mesurerTable<TableReservee>(cles, requetes);
         }
     }
-    cout << "Hauteur : nombre de niveaux de l'arbre (map : non accessible ; unordered_map : table de hachage).\n";
+    cout << "\n=== Collisions : k cles par case de unordered_map (u_map) ===\n\n";
+    afficherTableaux(colonnes, tailles, r);
+    cout << "Nombre de cases B de la table, pour chaque N :" << cases << "\n";
 }
